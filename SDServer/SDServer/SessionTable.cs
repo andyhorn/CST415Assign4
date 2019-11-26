@@ -4,6 +4,8 @@
 // CST 415
 // Fall 2019
 // 
+// Extended by Andy Horn
+// October-November 2019
 
 using System;
 using System.Collections.Generic;
@@ -64,50 +66,65 @@ namespace SDServer
 
         public ulong OpenSession()
         {
-            // TODO: SessionTable.OpenSession()
-
             // allocate and return a new session to the caller
             // find a free sessionId
-            // allocate a new session instance
-            // save the session for later
-            
+            var sessionId = NextSessionId();
 
-            return 0;
+            // allocate a new session instance
+            var session = new Session(sessionId);
+
+            // save the session for later
+            sessions.Add(sessionId, session);
+
+            return sessionId;
         }
 
         public bool ResumeSession(ulong sessionID)
         {
-            // TODO: SessionTable.ResumeSession()
-
             // returns true only if sessionID is a valid and open sesssion, false otherwise
-            return false;
+            return sessions.ContainsKey(sessionID);
         }
 
         public void CloseSession(ulong sessionID)
         {
-            // TODO: SessionTable.CloseSession()
-
             // closes the session, will no longer be open and cannot be reused
             // throws a session exception if the session is not open
+            if (!sessions.ContainsKey(sessionID))
+            {
+                throw new SessionException($"No session exists with id {sessionID}, cannot close");
+            }
 
+            sessions.Remove(sessionID);
         }
 
         public string GetSessionValue(ulong sessionID, string key)
         {
-            // TODO: SessionTable.GetSessionValue()
-
-            // retrieves a session value, given session ID and key
+            // retrieves a session value, given a session ID and key
             // throws a session exception if the session is not open or if the value does not exist by that key
-            return "TODO";
+
+            if (!sessions.ContainsKey(sessionID))
+            {
+                throw new SessionException($"Session {sessionID} is not open");
+            }
+
+            if (!sessions[sessionID].values.ContainsKey(key))
+            {
+                throw new SessionException($"No document found for key '{key}'");
+            }
+
+            return sessions[sessionID].values[key];
         }
 
         public void PutSessionValue(ulong sessionID, string key, string value)
         {
-            // TODO: SessionTable.PutSessionValue()
-
             // stores a session value by session ID and key, replaces value if it already exists
             // throws a session exception if the session is not open
-            
+            if (!sessions.ContainsKey(sessionID))
+            {
+                throw new SessionException($"Session {sessionID} is not open");
+            }
+
+            sessions[sessionID].values[key] = value;
         }
     }
 }

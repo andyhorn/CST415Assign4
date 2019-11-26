@@ -15,7 +15,7 @@ namespace FTServer
 {
     class FTConnectedClient
     {
-        // represents a single connected ft client, that wants directory contents from the server
+        // represents a single connected ft client that wants directory contents from the server
         // each client will have its own socket and thread
         // client is given it's socket from the FTServer when the server accepts the connection
         // the client class creates it's own thread
@@ -29,84 +29,125 @@ namespace FTServer
 
         public FTConnectedClient(Socket clientSocket)
         {
-            // TODO: FTConnectedClient.FTConnectedClient()
-
             // save the client's socket
-            
+            this.clientSocket = clientSocket;
+
             // at this time, there is no stream, reader, write or thread
-            
+            stream = null;
+            reader = null;
+            writer = null;
+            clientThread = null;            
         }
 
         public void Start()
         {
-            // TODO: FTConnectedClient.Start()
-
             // called by the main thread to start the clientThread and process messages for the client
 
             // create and start the clientThread, pass in a reference to this class instance as a parameter
-
+            clientThread = new Thread(ThreadProc);
+            clientThread.Start(this);
         }
 
         private static void ThreadProc(Object param)
         {
-            // TODO: FTConnectedClient.ThreadProc()
-
             // the procedure for the clientThread
             // when this method returns, the clientThread will exit
 
             // the param is a FTConnectedClient instance
             // start processing messages with the Run() method
-
+            var client = (FTConnectedClient)param;
+            client.Run();
         }
 
         private void Run()
         {
-            // TODO: FTConnectedClient.Run()
-
             // this method is executed on the clientThread
 
             try
             {
                 // create network stream, reader and writer over the socket
+                stream = new NetworkStream(clientSocket);
+                reader = new StreamReader(stream, UTF8Encoding.ASCII);
+                writer = new StreamWriter(stream, UTF8Encoding.ASCII);
+
+                Console.WriteLine($"[{clientThread.ManagedThreadId.ToString()}] Stream, reader, and writer initialized");
                 
                 // process client requests
                 bool done = false;
                 while (!done)
                 {
                     // receive a message from the client
-                    
-                    // handle the message
-                    // if get
-                    {
-                        // get directoryName
-                                
-                        // retrieve directory contents and sending all the files
-                                
-                        // if directory does not exist! send an error!
-                                    
-                        // if directory exists, send each file to the client
-                        // for each file...
-                        // get the file's name
-                        // make sure it's a txt file
-                        // get the file contents
-                        // send a file to the client
-                        // send done after last file
-                                
-                    }
+                    var message = reader.ReadLine();
+                    Console.WriteLine($"[{clientThread.ManagedThreadId.ToString()}] Received message: {message}");
 
-                    // if exit
+                    switch (message)
                     {
-                        // client is done, close it's socket and quit the thread
-                        
-                    }
-                    
-                    // else invalid message
-                    {
-                        // error handling for an invalid message
-                        
-                        // this client is too broken to waste our time on!
-                        // quite processing messages and disconnect
-                        
+                        case "exit":
+                        {
+                            // client is done, close its socket and quit the thread
+                            done = true;
+                        }
+                        break;
+
+                        case "get":
+                        {
+                            // get directoryName
+                            var directoryName = reader.ReadLine();
+
+                            if (directoryName == null)
+                            {
+                                SendError("Empty directory");
+                                break;
+                            }
+
+                            Console.WriteLine($"[{clientThread.ManagedThreadId.ToString()}] Client asked for directory: {directoryName}");
+
+                            // retrieve directory contents and send all the files
+                            var directory = new DirectoryInfo(directoryName);
+
+                            // if directory does not exist! send an error!
+                            if (!directory.Exists)
+                            {
+                                SendError($"Directory {directoryName} does not exist");
+                                break;
+                            }
+
+                            // if directory exists, send each file to the client
+                            // for each file...
+                            foreach (var file in directory.GetFiles())
+                            {
+                                // make sure it's a .txt file
+                                if (file.Extension != ".txt")
+                                {
+                                    Console.WriteLine($"[{clientThread.ManagedThreadId.ToString()}] File {file.Name} is not a .txt file, skipping...");
+                                    continue;
+                                }
+
+                                // get the file's name
+                                var fileName = file.Name;
+                                SendFileName(fileName, file.Length);
+
+                                // get the file contents
+                                var contents = file.OpenText().ReadToEnd();
+                                SendFileContents(contents);
+                            }
+
+                            // send done after last file
+                            SendDone();
+                        }
+                        break;
+
+                        default: // invalid message
+                        {
+                            // error handling for an invalid message
+                            SendError($"Invalid request: {message}");
+
+                            // this client is too broken to waste our time on!
+                            // quit processing messages and disconnect
+                            Console.WriteLine($"[{clientThread.ManagedThreadId.ToString()}] Invalid request received, closing connection to client");
+                            done = true;
+                        }
+                        break;
                     }
                 }
             }
@@ -116,36 +157,47 @@ namespace FTServer
             }
 
             // close the client's writer, reader, network stream and socket
-            
+            reader.Close();
+            writer.Close();
+            stream.Close();
+            clientSocket.Close();
+
+            Console.WriteLine($"[{clientThread.ManagedThreadId.ToString()}] Reader, writer, stream, and socket closed");
         }
 
-        private void SendFileName(string fileName, int fileLength)
+        private void SendFileName(string fileName, long fileLength)
         {
-            // TODO: FTConnectedClient.SendFileName()
             // send file name and file length message
-
+            writer.WriteLine(fileName);
+            writer.WriteLine(fileLength.ToString());
+            writer.Flush();
+            Console.WriteLine($"[{clientThread.ManagedThreadId.ToString()}] Sent file name and length to client: {fileName}, {fileLength.ToString()}");
         }
 
         private void SendFileContents(string fileContents)
         {
-            // TODO: FTConnectedClient.SendFileContents()
             // send file contents only
             // NOTE: no \n at end of contents
-
+            writer.Write(fileContents);
+            writer.Flush();
+            Console.WriteLine($"[{clientThread.ManagedThreadId.ToString()}] Sent {fileContents.Length} bytes to client");
         }
 
         private void SendDone()
         {
-            // TODO: FTConnectedClient.SendDone()
             // send done message
-
+            writer.WriteLine("done");
+            writer.Flush();
+            Console.WriteLine($"[{clientThread.ManagedThreadId.ToString()}] Sent 'done' to client");
         }
 
         private void SendError(string errorMessage)
         {
-            // TODO: FTConnectedClient.SendError()
             // send error message
-
+            writer.WriteLine("error");
+            writer.WriteLine(errorMessage);
+            writer.Flush();
+            Console.WriteLine($"[{clientThread.ManagedThreadId.ToString()}] Sent 'error' to client");
         }
     }
 }
