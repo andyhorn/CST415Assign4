@@ -276,11 +276,35 @@ namespace SDServer
             {
                 try
                 {
+                    string documentContent = string.Empty;
+
                     // get the document name from the client
                     var documentName = reader.ReadLine();
 
-                    // get the document content from the session table
-                    var documentContent = sessionTable.GetSessionValue(sessionId, documentName);
+                    if (string.IsNullOrEmpty(documentName) || documentName.Equals("/"))
+                    {
+                        throw new Exception("Document name cannot be empty");
+                    }
+
+                    // test if the client is requesting a file or a session variable
+                    if (documentName.StartsWith("/"))
+                    {
+                        // find the file on disk
+                        var filePath = $"{Environment.CurrentDirectory}{documentName.Replace('/', Path.DirectorySeparatorChar)}";
+
+                        if (!File.Exists(filePath))
+                        {
+                            throw new Exception($"File {documentName} does not exist");
+                        }
+
+                        // read the contents
+                        documentContent = File.ReadAllText(filePath);
+                    }
+                    else
+                    {
+                        // get the document content from the session table
+                        documentContent = sessionTable.GetSessionValue(sessionId, documentName);
+                    }
 
                     // send success and document to the client
                     SendSuccess(documentName, documentContent);
