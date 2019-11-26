@@ -290,7 +290,7 @@ namespace SDServer
                     if (documentName.StartsWith("/"))
                     {
                         // find the file on disk
-                        var filePath = $"{Environment.CurrentDirectory}{documentName.Replace('/', Path.DirectorySeparatorChar)}";
+                        var filePath = MakeFilename(documentName);
 
                         if (!File.Exists(filePath))
                         {
@@ -339,8 +339,29 @@ namespace SDServer
                     var documentLength = int.Parse(reader.ReadLine());
                     var documentContents = ReceiveDocument(documentLength);
 
-                    // put the document into the session
-                    sessionTable.PutSessionValue(sessionId, documentName, documentContents);
+                    if (string.IsNullOrWhiteSpace(documentName) || documentName.Equals("/"))
+                    {
+                        throw new Exception("Document name cannot be empty");
+                    }
+
+                    if (documentName.StartsWith("/"))
+                    {
+                        // client requested a file
+                        var filePath = MakeFilename(documentName);
+
+                        // create new file or append to existing file (append a new line first)
+                        if (File.Exists(filePath))
+                        {
+                            File.AppendAllText(filePath, "\n");
+                        }
+
+                        File.AppendAllText(filePath, documentContents);
+                    }
+                    else
+                    {
+                        // put the document into the session
+                        sessionTable.PutSessionValue(sessionId, documentName, documentContents);
+                    }
 
                     // send success to the client
                     SendSuccess();
@@ -444,6 +465,21 @@ namespace SDServer
             Console.WriteLine($"Received {contents.Length} bytes of data");
 
             return contents;
+        }
+
+        private string MakeFilename(string path)
+        {
+            string filename = string.Empty;
+            char replace;
+
+            if (Path.DirectorySeparatorChar.Equals('/'))
+                replace = '\\';
+            else
+                replace = '/';
+
+            filename = $"{Environment.CurrentDirectory}{path.Replace(replace, Path.DirectorySeparatorChar)}";
+
+            return filename;
         }
     }
 }
